@@ -1,3 +1,4 @@
+# AWS CloudFormation Template for Simple WebSocket Chat App
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
@@ -6,6 +7,7 @@ Description: >
   SAM Template for simple-websockets-chat-app that has the DynamoDB table and Lambda
   functions needed to demonstrate the Websocket protocol on API Gateway.
 
+# Define input parameters for the template
 Parameters:
   TableName:
     Type: String
@@ -16,13 +18,17 @@ Parameters:
     AllowedPattern: ^[A-Za-z_]+$
     ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
 
+# Define the resources for the application
 Resources:
+  # WebSocket API definition
   SimpleChatWebSocket:
     Type: AWS::ApiGatewayV2::Api
     Properties:
       Name: SimpleChatWebSocket
       ProtocolType: WEBSOCKET
       RouteSelectionExpression: "$request.body.action"
+
+  # Connect route for WebSocket
   ConnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -34,6 +40,8 @@ Resources:
         - '/'
         - - 'integrations'
           - !Ref ConnectInteg
+
+  # Connect integration with Lambda function
   ConnectInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -43,6 +51,8 @@ Resources:
       IntegrationUri: 
         Fn::Sub:
             arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+
+  # Disconnect route for WebSocket
   DisconnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -54,6 +64,8 @@ Resources:
         - '/'
         - - 'integrations'
           - !Ref DisconnectInteg
+
+  # Disconnect integration with Lambda function
   DisconnectInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -63,6 +75,8 @@ Resources:
       IntegrationUri: 
         Fn::Sub:
             arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+
+  # Send message route for WebSocket
   SendRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -74,6 +88,8 @@ Resources:
         - '/'
         - - 'integrations'
           - !Ref SendInteg
+
+  # Send message integration with Lambda function
   SendInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -83,6 +99,8 @@ Resources:
       IntegrationUri: 
         Fn::Sub:
             arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendMessageFunction.Arn}/invocations
+            
+  # Deployment of the WebSocket API
   Deployment:
     Type: AWS::ApiGatewayV2::Deployment
     DependsOn:
@@ -91,6 +109,8 @@ Resources:
     - DisconnectRoute
     Properties:
       ApiId: !Ref SimpleChatWebSocket
+
+  # Stage for the WebSocket API
   Stage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -98,6 +118,8 @@ Resources:
       Description: Prod Stage
       DeploymentId: !Ref Deployment
       ApiId: !Ref SimpleChatWebSocket
+
+  # DynamoDB table to store connection identifiers
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -113,13 +135,15 @@ Resources:
       SSESpecification:
         SSEEnabled: True
       TableName: !Ref TableName
+
+  # Lambda function for handling connections
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Zip
       Architectures:
       - x86_64
-      CodeUri: onconnect/
+      CodeUri: src/onconnect/
       Handler: onconnect
       MemorySize: 256
       Runtime: go1.x
@@ -129,6 +153,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TableName
+
+  # Lambda permission for Connect Integration
   OnConnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -137,13 +163,15 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref OnConnectFunction
       Principal: apigateway.amazonaws.com
+
+  # Lambda function for handling disconnections
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Zip
       Architectures:
       - x86_64
-      CodeUri: ondisconnect/
+      CodeUri: src/ondisconnect/
       Handler: ondisconnect
       MemorySize: 256
       Runtime: go1.x
@@ -153,6 +181,8 @@ Resources:
       Policies:
       - DynamoDBCrudPolicy:
           TableName: !Ref TableName
+
+  # Lambda permission for Disconnect Integration
   OnDisconnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -161,13 +191,15 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref OnDisconnectFunction
       Principal: apigateway.amazonaws.com
+
+  # Lambda function for sending messages
   SendMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Zip
       Architectures:
       - x86_64
-      CodeUri: sendmessage/
+      CodeUri: src/sendmessage/
       Handler: sendmessage
       MemorySize: 256
       Runtime: go1.x
@@ -183,6 +215,8 @@ Resources:
           - 'execute-api:ManageConnections'
           Resource:
           - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
+
+  # Lambda permission for Send Integration
   SendMessagePermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -192,6 +226,7 @@ Resources:
       FunctionName: !Ref SendMessageFunction
       Principal: apigateway.amazonaws.com
 
+# Define the outputs for the template
 Outputs:
   ConnectionsTableArn:
     Description: "Connections table ARN"
