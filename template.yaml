@@ -17,6 +17,14 @@ Parameters:
     MaxLength: 50
     AllowedPattern: ^[A-Za-z_]+$
     ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
+  TableKey:
+    Type: String
+    Default: 'connectionId'
+    Description: (Required) The name of the new DynamoDB table primary key. Minimum 3 characters
+    MinLength: 3
+    MaxLength: 50
+    AllowedPattern: ^[A-Za-z_]+$
+    ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
 
 # Define the resources for the application
 Resources:
@@ -124,10 +132,10 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-      - AttributeName: "connectionId"
+      - AttributeName: !Ref TableKey
         AttributeType: "S"
       KeySchema:
-      - AttributeName: "connectionId"
+      - AttributeName: !Ref TableKey
         KeyType: "HASH"
       ProvisionedThroughput:
         ReadCapacityUnits: 5
@@ -206,6 +214,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
+          TABLE_KEY: !Ref TableKey
       Policies:
       - DynamoDBCrudPolicy:
           TableName: !Ref TableName

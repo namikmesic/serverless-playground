@@ -37,6 +37,19 @@ func (ch *ConnectionHelper) DeleteConnection(ctx context.Context, connectionID s
 	return ch.DeleteItem(ctx, key)
 }
 
-func (ch *ConnectionHelper) ScanConnections() (*dynamodb.ScanOutput, error) {
-	return ch.ScanItems("connectionId")
+func (ch *ConnectionHelper) ScanConnections(ctx context.Context) ([]string, error) {
+	scanOutput, err := ch.ScanItems(ctx, "connectionId")
+	if err != nil {
+		return nil, err
+	}
+
+	var connectionIDs []string
+	for _, item := range scanOutput.Items {
+		connectionID := item["connectionId"].S
+		if connectionID != nil {
+			connectionIDs = append(connectionIDs, *connectionID)
+		}
+	}
+
+	return connectionIDs, nil
 }

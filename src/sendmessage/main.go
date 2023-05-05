@@ -11,37 +11,27 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/namikmesic/serverless-playground/src/lib/dynamo" // Update the import path to your package location
 )
 
-type Connection struct {
-	ConnectionID string
-}
-
 var (
-	tableName   = aws.String(os.Getenv("TABLE_NAME"))
-	dynamodbSvc *dynamodb.DynamoDB
+	connectionHelper *dynamo.ConnectionHelper
 )
 
 func init() {
-	// Create a new session and DynamoDB client
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	dynamodbSvc = dynamodb.New(sess)
+	tableName := os.Getenv("TABLE_NAME")
+	connectionHelper = dynamo.NewConnectionHelper(tableName)
 }
 
-func handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	input := &dynamodb.ScanInput{
-		ProjectionExpression: aws.String("connectionId"),
-		TableName:            tableName,
-	}
-
-	connectionData, err := dynamodbSvc.Scan(input)
+func handler(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Scan for all connections
+	connections, err := connectionHelper.ScanConnections(ctx)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500, Body: err.Error()}, nil
 	}
+
+	// Get the current connection ID
+	currentConnectionID := event.RequestContext.ConnectionID
 
 	endpoint := fmt.Sprintf("https://%s/%s", event.RequestContext.DomainName, event.RequestContext.Stage)
 	apigwManagementAPI := apigatewaymanagementapi.New(session.Must(session.NewSession()), aws.NewConfig().WithEndpoint(endpoint))
@@ -54,26 +44,21 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 
 	data := postData["data"].(string)
 
-	for _, item := range connectionData.Items {
-		connection := Connection{}
-		err := dynamodbattribute.UnmarshalMap(item, &connection)
-		if err != nil {
-			return events.APIGatewayProxyResponse{StatusCode: 500, Body: err.Error()}, nil
+	for _, connection := range connections {
+		if connection == currentConnectionID {
+			continue // Skip the current connection
 		}
 
 		_, err = apigwManagementAPI.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{
-			ConnectionId: aws.String(connection.ConnectionID),
+			ConnectionId: aws.String(connection),
 			Data:         []byte(data),
 		})
 
 		if err != nil {
 			_, ok := err.(*apigatewaymanagementapi.GoneException)
 			if ok {
-				fmt.Printf("Found stale connection, deleting %s\n", connection.ConnectionID)
-				_, _ = dynamodbSvc.DeleteItem(&dynamodb.DeleteItemInput{
-					Key:       map[string]*dynamodb.AttributeValue{"connectionId": {S: aws.String(connection.ConnectionID)}},
-					TableName: tableName,
-				})
+				fmt.Printf("Found stale connection, deleting %s\n", connection)
+				_ = connectionHelper.DeleteConnection(ctx, connection)
 			} else {
 				return events.APIGatewayProxyResponse{StatusCode: 500, Body: err.Error()}, nil
 			}
@@ -82,7 +67,6 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 
 	return events.APIGatewayProxyResponse{StatusCode: 200, Body: "Data sent."}, nil
 }
-
 func main() {
 	lambda.Start(handler)
 }

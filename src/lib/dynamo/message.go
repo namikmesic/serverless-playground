@@ -39,6 +39,6 @@ func (mh *MessageHelper) DeleteMessage(ctx context.Context, messageID string) er
 	return mh.DeleteItem(ctx, key)
 }
 
-func (mh *MessageHelper) ScanMessages() (*dynamodb.ScanOutput, error) {
-	return mh.ScanItems("messageId, text")
+func (mh *MessageHelper) ScanMessages(ctx context.Context) (*dynamodb.ScanOutput, error) {
+	return mh.ScanItems(ctx, "messageId, text")
 }

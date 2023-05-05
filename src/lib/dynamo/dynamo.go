@@ -72,11 +72,11 @@ func (dh *DynamoHelper) DeleteItem(ctx context.Context, key map[string]*dynamodb
 	return err
 }
 
-func (dh *DynamoHelper) ScanItems(projectionExpression string) (*dynamodb.ScanOutput, error) {
+func (dh *DynamoHelper) ScanItems(ctx context.Context, projectionExpression string) (*dynamodb.ScanOutput, error) {
 	input := &dynamodb.ScanInput{
 		ProjectionExpression: aws.String(projectionExpression),
 		TableName:            dh.TableName,
 	}
 
-	return dh.DynamoDBSvc.Scan(input)
+	return dh.DynamoDBSvc.ScanWithContext(ctx, input)
 }
